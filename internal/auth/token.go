@@ -86,7 +86,7 @@ func (v Verifier) Verify(ctx context.Context, token string) (Principal, error) {
 	if err != nil {
 		return Principal{}, fmt.Errorf("fetch signing keys: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return Principal{}, errors.New("identity provider signing keys unavailable")
 	}
@@ -122,9 +122,7 @@ func (v Verifier) Verify(ctx context.Context, token string) (Principal, error) {
 		return Principal{}, errors.New("invalid token signature")
 	}
 	roles := append([]string{}, c.Roles.Realm...)
-	for _, r := range c.Resource["price-intelligence-spa"].Roles {
-		roles = append(roles, r)
-	}
+	roles = append(roles, c.Resource["price-intelligence-spa"].Roles...)
 	return Principal{Subject: c.Subject, Organization: c.Organization, Roles: roles}, nil
 }
 
