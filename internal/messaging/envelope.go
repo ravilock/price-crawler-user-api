@@ -35,7 +35,7 @@ func (e Envelope) Validate() error {
 	if !uuidPattern.MatchString(e.MessageID) {
 		return errors.New("message_id must be a UUID")
 	}
-	if !messageTypePattern.MatchString(e.MessageType) {
+	if !messageTypePattern.MatchString(e.MessageType) && e.MessageType != "source.alerts.read.requested" && e.MessageType != "source.alerts.read.result" {
 		return errors.New("message_type must be a dotted, versioned name")
 	}
 	if e.SchemaVersion != 1 {

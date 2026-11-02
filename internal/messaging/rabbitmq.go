@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	urlpkg "net/url"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ type Publisher struct {
 	confirms   <-chan amqp.Confirmation
 	returns    <-chan amqp.Return
 	mu         sync.Mutex
+	userID     string
 }
 
 func NewPublisher(url string) (*Publisher, error) {
@@ -46,7 +48,14 @@ func NewPublisher(url string) (*Publisher, error) {
 		_ = connection.Close()
 		return nil, fmt.Errorf("enable RabbitMQ publisher confirms: %w", err)
 	}
+	parsed, parseErr := urlpkg.Parse(url)
+	if parseErr != nil || parsed.User == nil || parsed.User.Username() == "" {
+		_ = channel.Close()
+		_ = connection.Close()
+		return nil, errors.New("broker user identity required")
+	}
 	return &Publisher{
+		userID:     parsed.User.Username(),
 		connection: connection,
 		channel:    channel,
 		confirms:   channel.NotifyPublish(make(chan amqp.Confirmation, 1)),
@@ -66,6 +75,7 @@ func (p *Publisher) Publish(ctx context.Context, queue string, envelope Envelope
 	defer p.mu.Unlock()
 	if err = p.channel.PublishWithContext(ctx, "", queue, true, false, amqp.Publishing{
 		ContentType:   "application/json",
+		UserId:        p.userID,
 		DeliveryMode:  amqp.Persistent,
 		MessageId:     envelope.MessageID,
 		CorrelationId: envelope.CorrelationID,
@@ -118,6 +128,7 @@ func (p *Publisher) RequestReply(parent context.Context, queue string, request E
 	}
 	err = p.channel.PublishWithContext(ctx, "", queue, true, false, amqp.Publishing{
 		ContentType:   "application/json",
+		UserId:        p.userID,
 		DeliveryMode:  amqp.Persistent,
 		MessageId:     request.MessageID,
 		CorrelationId: request.CorrelationID,

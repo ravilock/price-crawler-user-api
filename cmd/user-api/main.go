@@ -12,8 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"price-crawler/services/user-api/internal/auth"
 	"price-crawler/services/user-api/internal/config"
 	"price-crawler/services/user-api/internal/observability"
+	"price-crawler/services/user-api/internal/sourcealerts"
 )
 
 func checkIssuer(ctx context.Context, issuer, jwksURL string) error {
@@ -72,6 +74,7 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// Business consumers are added with their corresponding workflow tasks.
 	pool := observability.NewWorkerPool(cfg.WorkerConcurrency)
 	mux := http.NewServeMux()
+	mux.Handle("GET /api/v1/admin/source-alerts", auth.Require(auth.NewVerifier(cfg.OIDCIssuer, cfg.OIDCJWKSURL), "administrator")(sourcealerts.Handler(cfg.RabbitMQURL)))
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
 		if !broker.Ready() || !identity.Ready() {
 			http.Error(w, "required dependency unavailable", http.StatusServiceUnavailable)
